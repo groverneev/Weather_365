@@ -1,4 +1,4 @@
-# Weather 360 - iOS Weather App
+# Weather 365 - iOS Weather App
 
 A beautiful, modern iOS weather application built with SwiftUI that provides comprehensive weather information for any city worldwide.
 
@@ -29,12 +29,12 @@ A beautiful, modern iOS weather application built with SwiftUI that provides com
 ### 2. Configure API Key
 
 **Option A: Use Template (Recommended)**
-1. Copy `Config.template.swift` from the root directory to `Weather 360/Config.swift`
+1. Copy `Config.template.swift` from the root directory to `Weather 365/Config.swift`
 2. Replace `"YOUR_API_KEY_HERE"` with your actual API key
 3. The `Config.swift` file is already in `.gitignore` and won't be pushed to GitHub
 
 **Option B: Manual Setup**
-1. Create `Weather 360/Config.swift` file
+1. Create `Weather 365/Config.swift` file
 2. Add your API key:
 ```swift
 import Foundation
@@ -42,14 +42,14 @@ import Foundation
 struct Config {
     static let openWeatherMapAPIKey = "YOUR_ACTUAL_API_KEY_HERE"
     static let openWeatherMapBaseURL = "https://api.openweathermap.org/data/2.5/weather"
-    static let appName = "Weather 360"
+    static let appName = "Weather 365"
     static let appVersion = "1.0.0"
 }
 ```
 
 ### 3. Build and Run
 
-1. Open `Weather 360.xcodeproj` in Xcode
+1. Open `Weather 365.xcodeproj` in Xcode
 2. Select your target device or simulator
 3. Build and run the project (⌘+R)
 
@@ -88,7 +88,7 @@ This app uses the OpenWeatherMap Current Weather Data API which returns:
 - `WeatherView.swift` - Main weather display interface
 - `SearchView.swift` - City search and location functionality
 - `ContentView.swift` - Main app container
-- `Weather_360App.swift` - App entry point
+- `Weather_365App.swift` - App entry point
 
 ## Permissions
 
