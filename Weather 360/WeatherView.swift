@@ -6,6 +6,8 @@ struct WeatherView: View {
     @EnvironmentObject var themeManager: ThemeManager
     @EnvironmentObject var weatherService: WeatherService
     
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -36,107 +38,40 @@ struct WeatherView: View {
                         .environmentObject(themeManager)
                 }
                 
-                // Daily Forecast Section
-                if !weatherService.dailyForecasts.isEmpty {
-                    DailyForecastView(forecasts: weatherService.dailyForecasts, isCelsius: isCelsius)
-                        .environmentObject(themeManager)
-                }
-                
-                // High/Low temperatures and Weather details using consistent WeatherDetailCard format
-                HStack(spacing: 20) {
-                    // High temperature
-                    WeatherDetailCard(
-                        icon: "thermometer.sun.fill",
-                        title: "High",
-                        value: String(format: "%.0f°", isCelsius ? weather.highTemp : weather.highTemp.toFahrenheit()),
-                        color: .red
-                    )
-                    
-                    // Low temperature
-                    WeatherDetailCard(
-                        icon: "thermometer.snowflake",
-                        title: "Low",
-                        value: String(format: "%.0f°", isCelsius ? weather.lowTemp : weather.lowTemp.toFahrenheit()),
-                        color: .blue
-                    )
-                    
-                    // Humidity
-                    WeatherDetailCard(
-                        icon: "humidity",
-                        title: "Humidity",
-                        value: "\(weather.humidity)%",
-                        color: .blue
-                    )
-                    
-                    // Air Quality
-                    WeatherDetailCard(
-                        icon: airQualityIcon,
-                        title: "Air Quality",
-                        value: airQualityText,
-                        color: airQualityColor
-                    )
-                }
-                .padding(.horizontal, 20)
-                
-                // Weather detail cards
-                HStack(spacing: 20) {
-                    WeatherDetailCard(
-                        icon: "thermometer",
-                        title: "Feels Like",
-                        value: String(format: "%.0f°", isCelsius ? weather.feelsLike : weather.feelsLike.toFahrenheit()),
-                        color: .orange
-                    )
-                    
-                    WeatherDetailCard(
-                        icon: "wind",
-                        title: "Wind Speed",
-                        value: String(format: "%.1f m/s", weather.windSpeed),
-                        color: .cyan
-                    )
-                    
-                    WeatherDetailCard(
-                        icon: "location.north",
-                        title: "Wind Direction",
-                        value: weather.windDirection.windDirection(),
-                        color: .purple
-                    )
-                }
-                .padding(.horizontal, 20)
-                
-
-                
-                // Sunrise and Sunset
-                HStack(spacing: 40) {
-                    VStack {
-                        Image(systemName: "sunrise")
-                            .font(.title2)
-                            .foregroundColor(.orange)
-                        Text("Sunrise")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(weather.sunrise, style: .time)
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                            .environment(\.timeZone, TimeZone(secondsFromGMT: weather.timezoneOffset) ?? TimeZone.current)
+                if horizontalSizeClass == .regular {
+                    // iPad Layout: Daily Forecast and Details side-by-side
+                    HStack(alignment: .top, spacing: 20) {
+                        // Daily Forecast Section
+                        if !weatherService.dailyForecasts.isEmpty {
+                            DailyForecastView(forecasts: weatherService.dailyForecasts, isCelsius: isCelsius)
+                                .environmentObject(themeManager)
+                                .frame(maxWidth: 350) // Limit width for readability
+                        }
+                        
+                        // Details Grid
+                        VStack(spacing: 20) {
+                            weatherDetailsGrid
+                            
+                            // Sunrise and Sunset
+                            sunriseSunsetView
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                } else {
+                    // iPhone Layout: Vertical stack
+                    if !weatherService.dailyForecasts.isEmpty {
+                        DailyForecastView(forecasts: weatherService.dailyForecasts, isCelsius: isCelsius)
+                            .environmentObject(themeManager)
                     }
                     
-                    VStack {
-                        Image(systemName: "sunset")
-                            .font(.title2)
-                            .foregroundColor(.orange)
-                        Text("Sunset")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(weather.sunset, style: .time)
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                            .environment(\.timeZone, TimeZone(secondsFromGMT: weather.timezoneOffset) ?? TimeZone.current)
-                    }
+                    // Details Grid
+                    weatherDetailsGrid
+                        .padding(.horizontal, 20)
+                    
+                    // Sunrise and Sunset
+                    sunriseSunsetView
+                        .padding(.horizontal, 20)
                 }
-                .padding(.vertical, 20)
-                .padding(.horizontal, 40)
-                .background(Color.orange.opacity(0.1))
-                .cornerRadius(15)
                 
                 Spacer(minLength: 20)
             }
@@ -148,6 +83,101 @@ struct WeatherView: View {
                 endPoint: .bottomTrailing
             )
         )
+    }
+    
+    private var weatherDetailsGrid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 20)], spacing: 20) {
+            // High temperature
+            WeatherDetailCard(
+                icon: "thermometer.sun.fill",
+                title: "High",
+                value: String(format: "%.0f°", isCelsius ? weather.highTemp : weather.highTemp.toFahrenheit()),
+                color: .red
+            )
+            
+            // Low temperature
+            WeatherDetailCard(
+                icon: "thermometer.snowflake",
+                title: "Low",
+                value: String(format: "%.0f°", isCelsius ? weather.lowTemp : weather.lowTemp.toFahrenheit()),
+                color: .blue
+            )
+            
+            // Humidity
+            WeatherDetailCard(
+                icon: "humidity",
+                title: "Humidity",
+                value: "\(weather.humidity)%",
+                color: .blue
+            )
+            
+            // Air Quality
+            WeatherDetailCard(
+                icon: airQualityIcon,
+                title: "Air Quality",
+                value: airQualityText,
+                color: airQualityColor
+            )
+            
+            // Feels Like
+            WeatherDetailCard(
+                icon: "thermometer",
+                title: "Feels Like",
+                value: String(format: "%.0f°", isCelsius ? weather.feelsLike : weather.feelsLike.toFahrenheit()),
+                color: .orange
+            )
+            
+            // Wind Speed
+            WeatherDetailCard(
+                icon: "wind",
+                title: "Wind Speed",
+                value: String(format: "%.1f m/s", weather.windSpeed),
+                color: .cyan
+            )
+            
+            // Wind Direction
+            WeatherDetailCard(
+                icon: "location.north",
+                title: "Wind Direction",
+                value: weather.windDirection.windDirection(),
+                color: .purple
+            )
+        }
+    }
+    
+    private var sunriseSunsetView: some View {
+        HStack(spacing: 40) {
+            VStack {
+                Image(systemName: "sunrise")
+                    .font(.title2)
+                    .foregroundColor(.orange)
+                Text("Sunrise")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(weather.sunrise, style: .time)
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .environment(\.timeZone, TimeZone(secondsFromGMT: weather.timezoneOffset) ?? TimeZone.current)
+            }
+            
+            VStack {
+                Image(systemName: "sunset")
+                    .font(.title2)
+                    .foregroundColor(.orange)
+                Text("Sunset")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(weather.sunset, style: .time)
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .environment(\.timeZone, TimeZone(secondsFromGMT: weather.timezoneOffset) ?? TimeZone.current)
+            }
+        }
+        .padding(.vertical, 20)
+        .padding(.horizontal, 40)
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(15)
+        .frame(maxWidth: .infinity)
     }
     
     // MARK: - Computed Properties
