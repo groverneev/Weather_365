@@ -2,8 +2,8 @@
 
 ## App Information
 
-**App Name:** Weather 360
-**Bundle Identifier:** com.yourcompany.weather360 (You'll need to set this)
+**App Name:** Weather 365
+**Bundle Identifier:** com.new.weather365
 **Version:** 1.0.0
 **Build Number:** 1
 **Category:** Weather
@@ -15,7 +15,7 @@
 Beautiful weather app for iOS
 
 **Full Description:**
-Weather 360 is a beautifully designed iOS weather application that provides comprehensive weather information for any city worldwide. 
+Weather 365 is a beautifully designed iOS weather application that provides comprehensive weather information for any city worldwide. 
 
 **Key Features:**
 • Get current weather conditions for any city
@@ -33,7 +33,7 @@ Weather 360 is a beautifully designed iOS weather application that provides comp
 • Outdoor activity planning
 • General weather awareness
 
-Download Weather 360 today and never be caught off guard by the weather again!
+Download Weather 365 today and never be caught off guard by the weather again!
 
 ## Keywords
 
