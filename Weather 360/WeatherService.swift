@@ -761,8 +761,11 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         print("📍 [DEBUG] Location timestamp: \(location.timestamp)")
         
         // Only use location if it's recent and accurate
+        // Only use location if it's recent and accurate enough for weather (city-level)
         let timeSinceUpdate = Date().timeIntervalSince(location.timestamp)
-        if timeSinceUpdate < 30 && location.horizontalAccuracy <= 1000 {
+        // Relaxed constraints: accept location up to 30 minutes old and 5km accuracy
+        // This prevents silent failures when the system returns a cached location
+        if timeSinceUpdate < 1800 && location.horizontalAccuracy <= 5000 {
             self.location = location
             print("📍 [DEBUG] Location accepted and stored")
             
@@ -772,7 +775,17 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             // Notify the weather service that location was received
             onLocationReceived?(location)
         } else {
-            print("📍 [DEBUG] Location rejected - too old or inaccurate")
+            print("📍 [DEBUG] Location rejected - too old (\(timeSinceUpdate)s) or inaccurate (\(location.horizontalAccuracy)m)")
+            // Even if rejected for "best" accuracy, for weather we usually want to fall back to it rather than show nothing
+            // But if it's extremely old/inaccurate, we might want to trigger an error or retry.
+            // For now, with 30m/5km limits, we cover most cases.
+            
+            // If we are stuck in "Getting location..." state, we should probably fail gracefully
+            if currentCity == "Getting location..." {
+                 DispatchQueue.main.async {
+                     self.currentCity = "Unable to determine precise location"
+                 }
+            }
         }
     }
     
