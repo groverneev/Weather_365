@@ -40,23 +40,30 @@ struct WeatherView: View {
                 
                 if horizontalSizeClass == .regular {
                     // iPad Layout: Daily Forecast and Details side-by-side
-                    HStack(alignment: .top, spacing: 20) {
-                        // Daily Forecast Section
-                        if !weatherService.dailyForecasts.isEmpty {
-                            DailyForecastView(forecasts: weatherService.dailyForecasts, isCelsius: isCelsius)
-                                .environmentObject(themeManager)
-                                .frame(maxWidth: 350) // Limit width for readability
+                    GeometryReader { geometry in
+                        let availableWidth = geometry.size.width - 40 // Account for padding
+                        let forecastWidth = min(max(availableWidth * 0.35, 280), 400) // 35% of width, min 280, max 400
+
+                        HStack(alignment: .top, spacing: 20) {
+                            // Daily Forecast Section
+                            if !weatherService.dailyForecasts.isEmpty {
+                                DailyForecastView(forecasts: weatherService.dailyForecasts, isCelsius: isCelsius)
+                                    .environmentObject(themeManager)
+                                    .frame(width: forecastWidth)
+                            }
+
+                            // Details Grid
+                            VStack(spacing: 20) {
+                                iPadWeatherDetailsGrid
+
+                                // Sunrise and Sunset
+                                sunriseSunsetView
+                            }
+                            .frame(maxWidth: .infinity)
                         }
-                        
-                        // Details Grid
-                        VStack(spacing: 20) {
-                            weatherDetailsGrid
-                            
-                            // Sunrise and Sunset
-                            sunriseSunsetView
-                        }
+                        .padding(.horizontal, 20)
                     }
-                    .padding(.horizontal, 20)
+                    .frame(minHeight: 400) // Ensure GeometryReader has proper height
                 } else {
                     // iPhone Layout: Vertical stack
                     if !weatherService.dailyForecasts.isEmpty {
@@ -85,6 +92,63 @@ struct WeatherView: View {
         )
     }
     
+    // iPad-specific grid with fixed 3 columns for better layout on larger screens
+    private var iPadWeatherDetailsGrid: some View {
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 15),
+            GridItem(.flexible(), spacing: 15),
+            GridItem(.flexible(), spacing: 15)
+        ], spacing: 15) {
+            // High temperature
+            WeatherDetailCard(
+                icon: "thermometer.sun.fill",
+                title: "High",
+                value: String(format: "%.0f°", isCelsius ? weather.highTemp : weather.highTemp.toFahrenheit()),
+                color: .red
+            )
+
+            // Low temperature
+            WeatherDetailCard(
+                icon: "thermometer.snowflake",
+                title: "Low",
+                value: String(format: "%.0f°", isCelsius ? weather.lowTemp : weather.lowTemp.toFahrenheit()),
+                color: .blue
+            )
+
+            // Humidity
+            WeatherDetailCard(
+                icon: "humidity",
+                title: "Humidity",
+                value: "\(weather.humidity)%",
+                color: .blue
+            )
+
+            // Air Quality
+            WeatherDetailCard(
+                icon: airQualityIcon,
+                title: "Air Quality",
+                value: airQualityText,
+                color: airQualityColor
+            )
+
+            // Feels Like
+            WeatherDetailCard(
+                icon: "thermometer",
+                title: "Feels Like",
+                value: String(format: "%.0f°", isCelsius ? weather.feelsLike : weather.feelsLike.toFahrenheit()),
+                color: .orange
+            )
+
+            // Wind Speed
+            WeatherDetailCard(
+                icon: "wind",
+                title: "Wind Speed",
+                value: String(format: "%.1f m/s", weather.windSpeed),
+                color: .cyan
+            )
+        }
+    }
+
     private var weatherDetailsGrid: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 20)], spacing: 20) {
             // High temperature

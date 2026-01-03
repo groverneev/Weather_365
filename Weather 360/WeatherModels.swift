@@ -68,8 +68,16 @@ struct System: Codable {
 }
 
 // MARK: - Weather Display Model (for UI)
-struct WeatherDisplay: Identifiable {
+struct WeatherDisplay: Identifiable, Equatable {
     let id = UUID() // Add unique identifier for sheet presentation
+
+    static func == (lhs: WeatherDisplay, rhs: WeatherDisplay) -> Bool {
+        // Compare by city name and temperature for practical equality
+        // (different fetches for same city should be considered equal for UI purposes)
+        return lhs.cityName == rhs.cityName &&
+               lhs.temperature == rhs.temperature &&
+               lhs.humidity == rhs.humidity
+    }
     let cityName: String
     let temperature: Double
     let feelsLike: Double

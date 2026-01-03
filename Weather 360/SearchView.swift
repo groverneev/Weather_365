@@ -8,14 +8,25 @@ struct SearchView: View {
     @State private var showingLocationAlert = false
     @State private var locationAlertMessage = ""
     @State private var isCelsius = false // Temperature unit toggle - default to Fahrenheit
-    
+    @State private var showWeatherSheet = false // Explicit control for showing weather
+
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    
+
+    // Use device idiom as fallback for iPad detection (handles Split View edge cases)
+    private var isRegularLayout: Bool {
+        // Check both size class AND device idiom for more reliable iPad detection
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            // On iPad, use regular layout unless in very compact split view
+            return horizontalSizeClass != .compact || UIScreen.main.bounds.width > 500
+        }
+        return horizontalSizeClass == .regular
+    }
+
     var body: some View {
         Group {
-            if horizontalSizeClass == .regular {
+            if isRegularLayout {
                 if #available(iOS 16.0, *) {
-                    NavigationSplitView {
+                    NavigationSplitView(columnVisibility: .constant(.all)) {
                         searchContent
                             .alert("Location Access Required", isPresented: $showingLocationAlert) {
                                 Button("Cancel", role: .cancel) { }
@@ -27,199 +38,338 @@ struct SearchView: View {
                             } message: {
                                 Text("Location access is required to get weather for your current location. Please enable location access in Settings.\n\n1. Tap 'Open Settings'\n2. Tap 'Privacy & Security'\n3. Tap 'Location Services'\n4. Find 'Weather 360' and enable it")
                             }
+                            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
                     } detail: {
-                        if let weather = weatherService.weather {
+                        if weatherService.isLoading {
+                            loadingView
+                        } else if let errorMessage = weatherService.errorMessage {
+                            errorView(message: errorMessage)
+                        } else if let weather = weatherService.weather {
                             WeatherView(weather: weather, isCelsius: isCelsius)
                                 .environmentObject(themeManager)
                                 .environmentObject(weatherService)
                         } else {
-                            VStack(spacing: 20) {
-                                Image(systemName: "cloud.sun.fill")
-                                    .font(.system(size: 80))
-                                    .foregroundColor(.gray.opacity(0.5))
-                                Text("Search for a city")
-                                    .font(.title)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.secondary)
-                                Text("Enter a city name in the sidebar to view the forecast")
-                                    .font(.body)
-                                    .foregroundColor(.secondary)
-                                    .multilineTextAlignment(.center)
-                            }
-                            .padding()
+                            placeholderView
                         }
                     }
+                    .navigationSplitViewStyle(.balanced)
                 } else {
-                    standardLayout
+                    // iOS 15 iPad fallback - use NavigationView with proper styling
+                    iPadLegacyLayout
                 }
             } else {
-                standardLayout
+                // iPhone layout
+                iPhoneLayout
             }
         }
         .background(themeManager.isDarkMode ? Color(.systemGray6) : Color(.systemBackground))
     }
-    
-    var standardLayout: some View {
+
+    // MARK: - Layout Views
+
+    private var iPadLegacyLayout: some View {
         NavigationView {
             searchContent
                 .navigationBarHidden(true)
-                .sheet(item: $weatherService.weather) { weather in
+
+            // Detail view for iPad NavigationView
+            if weatherService.isLoading {
+                loadingView
+            } else if let errorMessage = weatherService.errorMessage {
+                errorView(message: errorMessage)
+            } else if let weather = weatherService.weather {
+                WeatherView(weather: weather, isCelsius: isCelsius)
+                    .environmentObject(themeManager)
+                    .environmentObject(weatherService)
+            } else {
+                placeholderView
+            }
+        }
+        .navigationViewStyle(.columns)
+        .alert("Location Access Required", isPresented: $showingLocationAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Open Settings") {
+                if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(settingsUrl)
+                }
+            }
+        } message: {
+            Text("Location access is required to get weather for your current location. Please enable location access in Settings.\n\n1. Tap 'Open Settings'\n2. Tap 'Privacy & Security'\n3. Tap 'Location Services'\n4. Find 'Weather 360' and enable it")
+        }
+    }
+
+    private var iPhoneLayout: some View {
+        NavigationView {
+            ZStack {
+                searchContent
+                    .navigationBarHidden(true)
+
+                // Loading overlay for iPhone
+                if weatherService.isLoading {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                    loadingView
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(themeManager.isDarkMode ? Color(.systemGray5) : Color.white)
+                                .shadow(radius: 10)
+                        )
+                        .padding(40)
+                }
+            }
+            .sheet(isPresented: $showWeatherSheet) {
+                if let weather = weatherService.weather {
                     WeatherView(weather: weather, isCelsius: isCelsius)
                         .environmentObject(themeManager)
                         .environmentObject(weatherService)
                 }
-                .alert("Location Access Required", isPresented: $showingLocationAlert) {
-                    Button("Cancel", role: .cancel) { }
-                    Button("Open Settings") {
-                        if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(settingsUrl)
-                        }
+            }
+            .alert("Location Access Required", isPresented: $showingLocationAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Open Settings") {
+                    if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(settingsUrl)
                     }
-                } message: {
-                    Text("Location access is required to get weather for your current location. Please enable location access in Settings.\n\n1. Tap 'Open Settings'\n2. Tap 'Privacy & Security'\n3. Tap 'Location Services'\n4. Find 'Weather 360' and enable it")
                 }
+            } message: {
+                Text("Location access is required to get weather for your current location. Please enable location access in Settings.\n\n1. Tap 'Open Settings'\n2. Tap 'Privacy & Security'\n3. Tap 'Location Services'\n4. Find 'Weather 360' and enable it")
+            }
+            .alert("Error", isPresented: .constant(weatherService.errorMessage != nil && !weatherService.isLoading)) {
+                Button("OK") {
+                    weatherService.errorMessage = nil
+                }
+            } message: {
+                Text(weatherService.errorMessage ?? "An error occurred")
+            }
         }
+        .navigationViewStyle(.stack)
+        .onChange(of: weatherService.weather) { newWeather in
+            // Show sheet when weather data is loaded on iPhone
+            if newWeather != nil && !weatherService.isLoading {
+                showWeatherSheet = true
+            }
+        }
+    }
+
+    private var loadingView: some View {
+        VStack(spacing: 20) {
+            ProgressView()
+                .scaleEffect(1.5)
+                .progressViewStyle(CircularProgressViewStyle(tint: .blue))
+            Text("Loading weather...")
+                .font(.headline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var placeholderView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "cloud.sun.fill")
+                .font(.system(size: 80))
+                .foregroundColor(.gray.opacity(0.5))
+            Text("Search for a city")
+                .font(.title)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+            Text("Enter a city name to view the forecast")
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func errorView(message: String) -> some View {
+        VStack(spacing: 20) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 60))
+                .foregroundColor(.orange)
+            Text("Error")
+                .font(.title)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+            Text(message)
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Try Again") {
+                if !cityInput.isEmpty {
+                    weatherService.fetchWeather(for: cityInput)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     var searchContent: some View {
-        VStack(spacing: 0) {
-            // Top bar with current location and theme toggle
-            HStack {
-                // Current location display
-                HStack(spacing: 8) {
-                    Image(systemName: "location.fill")
-                        .foregroundColor(.blue)
-                        .font(.caption)
-                    Text(weatherService.locationManager.currentCity)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    // Refresh location button
-                    Button(action: {
-                        weatherService.locationManager.requestLocation()
-                    }) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.caption2)
-                            .foregroundColor(.blue)
-                    }
-                }
-                
-                Spacer()
-                
-                // Theme toggle
-                Button(action: {
-                    themeManager.toggleTheme()
-                }) {
-                    Image(systemName: themeManager.isDarkMode ? "sun.max.fill" : "moon.fill")
-                        .font(.title2)
-                        .foregroundColor(themeManager.isDarkMode ? .yellow : .purple)
-                        .padding(8)
-                        .background(themeManager.isDarkMode ? Color.yellow.opacity(0.2) : Color.purple.opacity(0.2))
-                        .clipShape(Circle())
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(themeManager.isDarkMode ? Color(.systemGray6) : Color(.systemBackground))
-            
-            // Main content
-            VStack(spacing: 30) {
-                Spacer()
-                
-                // App title
-                VStack(spacing: 10) {
-                    Text("Weather 360")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
-                    
-                    Text("Get accurate weather information for any city")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                
-                // Temperature unit toggle
-                HStack(spacing: 0) {
-                    Button(action: {
-                        isCelsius = false
-                    }) {
-                        Text("°F")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                            .foregroundColor(!isCelsius ? .white : .blue)
-                            .frame(width: 50, height: 40)
-                            .background(!isCelsius ? Color.blue : Color.blue.opacity(0.1))
-                            .roundedCorner(8, corners: [.topLeft, .bottomLeft])
-                    }
-                    
-                    Button(action: {
-                        isCelsius = true
-                    }) {
-                        Text("°C")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                            .foregroundColor(isCelsius ? .white : .blue)
-                            .frame(width: 50, height: 40)
-                            .background(isCelsius ? Color.blue : Color.blue.opacity(0.1))
-                            .roundedCorner(8, corners: [.topRight, .bottomRight])
-                    }
-                }
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-                )
-                
-                // Search input
-                VStack(spacing: 15) {
-                    TextField("Enter city name", text: $cityInput)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .font(.title3)
-                        .padding(.horizontal, 20)
-                    
-                    Button(action: {
-                        if !cityInput.isEmpty {
-                            weatherService.fetchWeather(for: cityInput)
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "magnifyingglass")
-                            Text("Search Weather")
-                        }
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .cornerRadius(15)
-                    }
-                    .disabled(cityInput.isEmpty)
-                    .padding(.horizontal, 20)
-                }
-                
-                // Current Location Button
-                Button(action: {
-                    handleLocationRequest()
-                }) {
+        GeometryReader { geometry in
+            let isCompactHeight = geometry.size.height < 600
+            let horizontalPadding: CGFloat = min(max(geometry.size.width * 0.05, 16), 40)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Top bar with current location and theme toggle
                     HStack {
-                        Image(systemName: locationButtonIcon)
-                        Text(locationButtonText)
+                        // Current location display
+                        HStack(spacing: 8) {
+                            Image(systemName: "location.fill")
+                                .foregroundColor(.blue)
+                                .font(.caption)
+                            Text(weatherService.locationManager.currentCity)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+
+                            // Refresh location button
+                            Button(action: {
+                                weatherService.locationManager.requestLocation()
+                            }) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.caption2)
+                                    .foregroundColor(.blue)
+                            }
+                            .frame(minWidth: 44, minHeight: 44) // Minimum tap target
+                        }
+
+                        Spacer()
+
+                        // Theme toggle
+                        Button(action: {
+                            themeManager.toggleTheme()
+                        }) {
+                            Image(systemName: themeManager.isDarkMode ? "sun.max.fill" : "moon.fill")
+                                .font(.title2)
+                                .foregroundColor(themeManager.isDarkMode ? .yellow : .purple)
+                                .padding(8)
+                                .background(themeManager.isDarkMode ? Color.yellow.opacity(0.2) : Color.purple.opacity(0.2))
+                                .clipShape(Circle())
+                        }
+                        .frame(minWidth: 44, minHeight: 44) // Minimum tap target
                     }
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(locationButtonColor)
-                    .cornerRadius(15)
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.vertical, 10)
+                    .background(themeManager.isDarkMode ? Color(.systemGray6) : Color(.systemBackground))
+
+                    // Main content
+                    VStack(spacing: isCompactHeight ? 20 : 30) {
+                        Spacer(minLength: isCompactHeight ? 20 : 40)
+
+                        // App title
+                        VStack(spacing: 10) {
+                            Text("Weather 360")
+                                .font(isCompactHeight ? .title : .largeTitle)
+                                .fontWeight(.bold)
+                                .foregroundColor(.primary)
+
+                            Text("Get accurate weather information for any city")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, horizontalPadding)
+                        }
+
+                        // Temperature unit toggle
+                        HStack(spacing: 0) {
+                            Button(action: {
+                                isCelsius = false
+                            }) {
+                                Text("°F")
+                                    .font(.title3)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(!isCelsius ? .white : .blue)
+                                    .frame(width: 50, height: 44) // Minimum tap height
+                                    .background(!isCelsius ? Color.blue : Color.blue.opacity(0.1))
+                                    .roundedCorner(8, corners: [.topLeft, .bottomLeft])
+                            }
+
+                            Button(action: {
+                                isCelsius = true
+                            }) {
+                                Text("°C")
+                                    .font(.title3)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(isCelsius ? .white : .blue)
+                                    .frame(width: 50, height: 44) // Minimum tap height
+                                    .background(isCelsius ? Color.blue : Color.blue.opacity(0.1))
+                                    .roundedCorner(8, corners: [.topRight, .bottomRight])
+                            }
+                        }
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                        )
+
+                        // Search input
+                        VStack(spacing: 15) {
+                            TextField("Enter city name", text: $cityInput)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .font(.body)
+                                .frame(minHeight: 44) // Minimum tap height
+                                .padding(.horizontal, horizontalPadding)
+                                .submitLabel(.search)
+                                .onSubmit {
+                                    if !cityInput.isEmpty {
+                                        hideKeyboard()
+                                        weatherService.fetchWeather(for: cityInput)
+                                    }
+                                }
+
+                            Button(action: {
+                                hideKeyboard()
+                                if !cityInput.isEmpty {
+                                    weatherService.fetchWeather(for: cityInput)
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "magnifyingglass")
+                                    Text("Search Weather")
+                                }
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(minHeight: 50) // Minimum tap height
+                                .background(cityInput.isEmpty ? Color.gray : Color.blue)
+                                .cornerRadius(15)
+                            }
+                            .disabled(cityInput.isEmpty || weatherService.isLoading)
+                            .padding(.horizontal, horizontalPadding)
+                        }
+
+                        // Current Location Button
+                        Button(action: {
+                            hideKeyboard()
+                            handleLocationRequest()
+                        }) {
+                            HStack {
+                                Image(systemName: locationButtonIcon)
+                                Text(locationButtonText)
+                            }
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(minHeight: 50) // Minimum tap height
+                            .background(weatherService.isLoading ? Color.gray : locationButtonColor)
+                            .cornerRadius(15)
+                        }
+                        .disabled(weatherService.isLoading)
+                        .padding(.horizontal, horizontalPadding)
+
+                        Spacer(minLength: isCompactHeight ? 20 : 40)
+                    }
+                    .padding(.top, isCompactHeight ? 10 : 20)
+                    .frame(minHeight: geometry.size.height - 60) // Ensure content fills available space
                 }
-                .padding(.horizontal, 20)
-                
-                // Location status info removed - was showing "location access granted" text
-                
-                Spacer()
             }
-            .padding(.top, 20)
         }
+    }
+
+    // Helper to dismiss keyboard
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
     
     // MARK: - Computed Properties
