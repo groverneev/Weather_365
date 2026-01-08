@@ -1,85 +1,18 @@
 import Foundation
-
-// MARK: - Weather Response Models
-struct WeatherResponse: Codable {
-    let coord: Coordinates
-    let weather: [Weather]
-    let base: String
-    let main: MainWeather
-    let visibility: Int
-    let wind: Wind
-    let clouds: Clouds
-    let dt: Int
-    let sys: System
-    let timezone: Int
-    let id: Int
-    let name: String
-    let cod: Int
-}
-
-struct Coordinates: Codable {
-    let lon: Double
-    let lat: Double
-}
-
-struct Weather: Codable {
-    let id: Int
-    let main: String
-    let description: String
-    let icon: String
-}
-
-struct MainWeather: Codable {
-    let temp: Double
-    let feelsLike: Double
-    let tempMin: Double
-    let tempMax: Double
-    let pressure: Int
-    let humidity: Int
-    let seaLevel: Int?
-    let grndLevel: Int?
-    
-    enum CodingKeys: String, CodingKey {
-        case temp, pressure, humidity
-        case feelsLike = "feels_like"
-        case tempMin = "temp_min"
-        case tempMax = "temp_max"
-        case seaLevel = "sea_level"
-        case grndLevel = "grnd_level"
-    }
-}
-
-struct Wind: Codable {
-    let speed: Double
-    let deg: Int
-    let gust: Double?
-}
-
-struct Clouds: Codable {
-    let all: Int
-}
-
-struct System: Codable {
-    let type: Int?
-    let id: Int?
-    let country: String
-    let sunrise: Int
-    let sunset: Int
-}
+import WeatherKit
 
 // MARK: - Weather Display Model (for UI)
 struct WeatherDisplay: Identifiable, Equatable {
-    let id = UUID() // Add unique identifier for sheet presentation
+    let id = UUID()
 
     static func == (lhs: WeatherDisplay, rhs: WeatherDisplay) -> Bool {
-        // Compare by city name and temperature for practical equality
-        // (different fetches for same city should be considered equal for UI purposes)
         return lhs.cityName == rhs.cityName &&
                lhs.temperature == rhs.temperature &&
                lhs.humidity == rhs.humidity
     }
+
     let cityName: String
-    let temperature: Double
+    let temperature: Double // In Celsius
     let feelsLike: Double
     let highTemp: Double
     let lowTemp: Double
@@ -88,31 +21,62 @@ struct WeatherDisplay: Identifiable, Equatable {
     let windSpeed: Double
     let windDirection: Int
     let description: String
-    let icon: String
+    let icon: String // SF Symbol name
     let sunrise: Date
     let sunset: Date
     let timezoneOffset: Int // Timezone offset in seconds from UTC
-    
-    init(from response: WeatherResponse) {
-        self.cityName = response.name
-        self.temperature = response.main.temp
-        self.feelsLike = response.main.feelsLike
-        self.highTemp = response.main.tempMax
-        self.lowTemp = response.main.tempMin
-        self.humidity = response.main.humidity
-        self.airQualityIndex = 3 // Default value, will be updated by separate API call
-        self.windSpeed = response.wind.speed
-        self.windDirection = response.wind.deg
-        self.description = response.weather.first?.description ?? ""
-        self.icon = response.weather.first?.icon ?? ""
-        self.timezoneOffset = response.timezone
-        
-        // Convert UTC times to city's local timezone
-        let _ = TimeZone(secondsFromGMT: response.timezone) ?? TimeZone.current
-        self.sunrise = Date(timeIntervalSince1970: TimeInterval(response.sys.sunrise))
-        self.sunset = Date(timeIntervalSince1970: TimeInterval(response.sys.sunset))
+
+    // Initialize from WeatherKit CurrentWeather
+    init(from currentWeather: CurrentWeather, cityName: String, timezoneOffset: Int) {
+        self.cityName = cityName
+        // WeatherKit returns temperature in the user's preferred unit, convert to Celsius
+        self.temperature = currentWeather.temperature.converted(to: .celsius).value
+        self.feelsLike = currentWeather.apparentTemperature.converted(to: .celsius).value
+        // For current weather, use the same temp for high/low (daily forecast has actual high/low)
+        self.highTemp = self.temperature
+        self.lowTemp = self.temperature
+        self.humidity = Int(currentWeather.humidity * 100)
+        self.airQualityIndex = 3 // Default - WeatherKit doesn't provide AQI directly
+        self.windSpeed = currentWeather.wind.speed.converted(to: .metersPerSecond).value
+        self.windDirection = Int(currentWeather.wind.direction.value)
+        self.description = currentWeather.condition.description
+        self.icon = currentWeather.symbolName
+        self.timezoneOffset = timezoneOffset
+
+        // Get sunrise/sunset from the current date's sun events if available
+        // Note: These will be set to current time as placeholder - actual sun times need daily forecast
+        let now = Date()
+        self.sunrise = now
+        self.sunset = now
     }
-    
+
+    // Initialize from WeatherKit CurrentWeather with daily forecast for accurate high/low and sun times
+    init(from currentWeather: CurrentWeather, dayWeather: DayWeather?, cityName: String, timezoneOffset: Int) {
+        self.cityName = cityName
+        self.temperature = currentWeather.temperature.converted(to: .celsius).value
+        self.feelsLike = currentWeather.apparentTemperature.converted(to: .celsius).value
+
+        if let day = dayWeather {
+            self.highTemp = day.highTemperature.converted(to: .celsius).value
+            self.lowTemp = day.lowTemperature.converted(to: .celsius).value
+            self.sunrise = day.sun.sunrise ?? Date()
+            self.sunset = day.sun.sunset ?? Date()
+        } else {
+            self.highTemp = self.temperature
+            self.lowTemp = self.temperature
+            self.sunrise = Date()
+            self.sunset = Date()
+        }
+
+        self.humidity = Int(currentWeather.humidity * 100)
+        self.airQualityIndex = 3 // Default
+        self.windSpeed = currentWeather.wind.speed.converted(to: .metersPerSecond).value
+        self.windDirection = Int(currentWeather.wind.direction.value)
+        self.description = currentWeather.condition.description
+        self.icon = currentWeather.symbolName
+        self.timezoneOffset = timezoneOffset
+    }
+
     // Custom initializer for previews and testing
     init(cityName: String, temperature: Double, feelsLike: Double, highTemp: Double, lowTemp: Double, humidity: Int, airQualityIndex: Int, windSpeed: Double, windDirection: Int, description: String, icon: String, sunrise: Date, sunset: Date, timezoneOffset: Int = 0) {
         self.cityName = cityName
@@ -132,99 +96,41 @@ struct WeatherDisplay: Identifiable, Equatable {
     }
 }
 
-// MARK: - Forecast Models
-struct ForecastResponse: Codable {
-    let list: [ForecastItem]
-    let city: ForecastCity
-}
-
-struct ForecastItem: Codable {
-    let dt: Int
-    let main: ForecastMain
-    let weather: [Weather]
-    let clouds: Clouds
-    let wind: Wind
-    let visibility: Int
-    let pop: Double
-    let sys: ForecastSys
-    let dtTxt: String
-    
-    enum CodingKeys: String, CodingKey {
-        case dt, main, weather, clouds, wind, visibility, pop, sys
-        case dtTxt = "dt_txt"
-    }
-}
-
-struct ForecastMain: Codable {
-    let temp: Double
-    let feelsLike: Double
-    let tempMin: Double
-    let tempMax: Double
-    let pressure: Int
-    let humidity: Int
-    let seaLevel: Int?
-    let grndLevel: Int?
-    
-    enum CodingKeys: String, CodingKey {
-        case temp, pressure, humidity
-        case feelsLike = "feels_like"
-        case tempMin = "temp_min"
-        case tempMax = "temp_max"
-        case seaLevel = "sea_level"
-        case grndLevel = "grnd_level"
-    }
-}
-
-struct ForecastSys: Codable {
-    let pod: String // Part of day: "d" for day, "n" for night
-}
-
-struct ForecastCity: Codable {
-    let id: Int
-    let name: String
-    let coord: Coordinates
-    let country: String
-    let population: Int
-    let timezone: Int
-    let sunrise: Int
-    let sunset: Int
-}
-
 // MARK: - Forecast Display Models
 struct HourlyForecast: Identifiable {
     let id = UUID()
     let time: Date
-    let temperature: Double
-    let icon: String
+    let temperature: Double // In Celsius
+    let icon: String // SF Symbol name
     let description: String
     let isSunset: Bool
-    let timezoneOffset: Int // Store timezone offset for proper time display
-    
-    init(from forecastItem: ForecastItem, timezoneOffset: Int) {
-        // Create time in the city's timezone, not UTC
-        let utcTime = Date(timeIntervalSince1970: TimeInterval(forecastItem.dt))
-        
-        // Apply timezone offset to get city-local time
-        if let cityTimezone = TimeZone(secondsFromGMT: timezoneOffset) {
-            var calendar = Calendar.current
-            calendar.timeZone = cityTimezone
-            self.time = calendar.date(from: calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: utcTime)) ?? utcTime
-        } else {
-            self.time = utcTime
-        }
-        
-        self.temperature = forecastItem.main.temp
-        self.icon = forecastItem.weather.first?.icon ?? ""
-        self.description = forecastItem.weather.first?.description ?? ""
+    let timezoneOffset: Int
+
+    // Initialize from WeatherKit HourWeather
+    init(from hourWeather: HourWeather, timezoneOffset: Int) {
+        self.time = hourWeather.date
+        self.temperature = hourWeather.temperature.converted(to: .celsius).value
+        self.icon = hourWeather.symbolName
+        self.description = hourWeather.condition.description
         self.timezoneOffset = timezoneOffset
-        
+
         // Check if this is around sunset time (between 6 PM and 8 PM) using city time
         var calendar = Calendar.current
         if let cityTimezone = TimeZone(secondsFromGMT: timezoneOffset) {
             calendar.timeZone = cityTimezone
         }
-        let hour = calendar.component(.hour, from: self.time)
+        let hour = calendar.component(.hour, from: hourWeather.date)
         self.isSunset = hour >= 18 && hour <= 20
+    }
+
+    // Custom initializer for previews and testing
+    init(time: Date, temperature: Double, icon: String, description: String, isSunset: Bool = false, timezoneOffset: Int = 0) {
+        self.time = time
+        self.temperature = temperature
+        self.icon = icon
+        self.description = description
+        self.isSunset = isSunset
+        self.timezoneOffset = timezoneOffset
     }
 }
 
@@ -232,80 +138,54 @@ struct DailyForecast: Identifiable {
     let id = UUID()
     let date: Date
     let dayName: String
-    let icon: String
-    let lowTemp: Double
-    let highTemp: Double
+    let icon: String // SF Symbol name
+    let lowTemp: Double // In Celsius
+    let highTemp: Double // In Celsius
     let description: String
-    
-    init(from forecastItems: [ForecastItem], timezoneOffset: Int) {
-        // Group forecast items by day and calculate daily min/max
-        var cityCalendar = Calendar.current
-        
-        // Set the calendar to use the city's timezone
-        if let cityTimezone = TimeZone(secondsFromGMT: timezoneOffset) {
-            cityCalendar.timeZone = cityTimezone
-        }
-        
-        // Find the first forecast item for this day
-        guard let firstItem = forecastItems.first else {
-            self.date = Date()
-            self.dayName = "Today"
-            self.icon = ""
-            self.lowTemp = 0
-            self.highTemp = 0
-            self.description = ""
-            return
-        }
-        
-        let date = Date(timeIntervalSince1970: TimeInterval(firstItem.dt))
-        self.date = date
-        
+
+    // Initialize from WeatherKit DayWeather
+    init(from dayWeather: DayWeather, timezoneOffset: Int, isToday: Bool = false) {
+        self.date = dayWeather.date
+        self.icon = dayWeather.symbolName
+        self.lowTemp = dayWeather.lowTemperature.converted(to: .celsius).value
+        self.highTemp = dayWeather.highTemperature.converted(to: .celsius).value
+        self.description = dayWeather.condition.description
+
         // Get day name using the location's timezone
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
-        
-        // Create timezone from the offset
-        if let timezone = TimeZone(secondsFromGMT: timezoneOffset) {
-            formatter.timeZone = timezone
+        var calendar = Calendar.current
+        if let cityTimezone = TimeZone(secondsFromGMT: timezoneOffset) {
+            calendar.timeZone = cityTimezone
         }
-        
-        // Determine if this is actually "today" in the city's timezone
-        let cityToday = cityCalendar.startOfDay(for: Date())
-        let forecastDay = cityCalendar.startOfDay(for: date)
-        let isActuallyToday = cityCalendar.isDate(forecastDay, inSameDayAs: cityToday)
-        
-        // Show "Today" only if it's actually today in the city's timezone
-        if isActuallyToday {
+
+        if isToday {
             self.dayName = "Today"
         } else {
-            self.dayName = formatter.string(from: date)
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEE"
+            if let timezone = TimeZone(secondsFromGMT: timezoneOffset) {
+                formatter.timeZone = timezone
+            }
+            self.dayName = formatter.string(from: dayWeather.date)
         }
-        
-        // Use the first item's weather for icon and description
-        self.icon = firstItem.weather.first?.icon ?? ""
-        self.description = firstItem.weather.first?.description ?? ""
-        
-        // Calculate daily min/max from all items for this day using city timezone
-        let dayItems = forecastItems.filter { item in
-            let itemDate = Date(timeIntervalSince1970: TimeInterval(item.dt))
-            return cityCalendar.isDate(itemDate, inSameDayAs: date)
-        }
-        
-        // Calculate min/max temperatures
-        let minTemp = dayItems.map({ $0.main.tempMin }).min() ?? firstItem.main.tempMin
-        let maxTemp = dayItems.map({ $0.main.tempMax }).max() ?? firstItem.main.tempMax
-        
-        self.lowTemp = minTemp
-        self.highTemp = maxTemp
+    }
+
+    // Custom initializer for previews and testing
+    init(date: Date, dayName: String, icon: String, lowTemp: Double, highTemp: Double, description: String) {
+        self.date = date
+        self.dayName = dayName
+        self.icon = icon
+        self.lowTemp = lowTemp
+        self.highTemp = highTemp
+        self.description = description
     }
 }
 
 // MARK: - Temperature Conversion
 extension Double {
     func toCelsius() -> Double {
-        return self
+        return self // Already in Celsius with WeatherKit
     }
-    
+
     func toFahrenheit() -> Double {
         return self * 9/5 + 32
     }

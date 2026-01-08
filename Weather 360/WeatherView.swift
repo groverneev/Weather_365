@@ -333,24 +333,24 @@ struct WeatherDetailCard: View {
 #Preview {
     let sampleWeather = WeatherDisplay(
         cityName: "San Francisco",
-        temperature: 293.15,
-        feelsLike: 291.15,
-        highTemp: 298.15,
-        lowTemp: 288.15,
+        temperature: 20.0,
+        feelsLike: 18.0,
+        highTemp: 25.0,
+        lowTemp: 15.0,
         humidity: 65,
         airQualityIndex: 2,
         windSpeed: 5.2,
         windDirection: 180,
-        description: "partly cloudy",
-        icon: "02d",
+        description: "Partly Cloudy",
+        icon: "cloud.sun.fill",
         sunrise: Date(),
         sunset: Date().addingTimeInterval(3600 * 12),
         timezoneOffset: -28800 // Pacific Time (UTC-8)
     )
-    
+
     let themeManager = ThemeManager()
     let weatherService = WeatherService()
-    
+
     WeatherView(weather: sampleWeather, isCelsius: true)
         .environmentObject(themeManager)
         .environmentObject(weatherService)

@@ -206,85 +206,25 @@ struct TemperatureRangeBar: View {
 }
 // MARK: - Weather Icon View
 struct WeatherIconView: View {
-    let iconCode: String
-    
+    let iconCode: String // SF Symbol name from WeatherKit
+
     var body: some View {
-        Image(systemName: weatherIconName)
+        Image(systemName: iconCode)
+            .symbolRenderingMode(.multicolor)
             .font(.title2)
-            .foregroundColor(weatherIconColor)
-    }
-    
-    private var weatherIconName: String {
-        // Use weather condition as primary factor, not time of day
-        switch iconCode {
-        // Clear sky
-        case "01d", "01n": return "sun.max.fill"
-        
-        // Partly cloudy
-        case "02d", "02n": return "cloud.sun.fill"
-        
-        // Cloudy
-        case "03d", "03n": return "cloud.fill"
-        
-        // Overcast
-        case "04d", "04n": return "cloud.fill"
-        
-        // Rain
-        case "09d", "09n": return "cloud.rain.fill"
-        case "10d", "10n": return "cloud.rain.fill"
-        
-        // Thunder
-        case "11d", "11n": return "cloud.bolt.rain.fill"
-        
-        // Snow
-        case "13d", "13n": return "snow"
-        
-        // Fog/Mist
-        case "50d", "50n": return "cloud.fog.fill"
-        
-        default: return "cloud.fill"
-        }
-    }
-    
-    private var weatherIconColor: Color {
-        // Colors based on weather condition, not time
-        switch iconCode {
-        // Clear sky - always bright
-        case "01d", "01n": return .yellow
-        
-        // Partly cloudy - warm
-        case "02d", "02n": return .orange
-        
-        // Cloudy/Overcast - neutral
-        case "03d", "03n", "04d", "04n": return .gray
-        
-        // Rain - cool
-        case "09d", "09n", "10d", "10n": return .blue
-        
-        // Thunder - dramatic
-        case "11d", "11n": return .purple
-        
-        // Snow - cold
-        case "13d", "13n": return .cyan
-        
-        // Fog - neutral
-        case "50d", "50n": return .gray
-        
-        default: return .gray
-        }
     }
 }
 
 #Preview {
     VStack(spacing: 30) {
         HourlyForecastView(forecasts: [
-            HourlyForecast(from: ForecastItem(dt: Int(Date().timeIntervalSince1970), main: ForecastMain(temp: 293.15, feelsLike: 291.15, tempMin: 288.15, tempMax: 298.15, pressure: 1013, humidity: 65, seaLevel: nil, grndLevel: nil), weather: [Weather(id: 800, main: "Clear", description: "clear sky", icon: "01d")], clouds: Clouds(all: 0), wind: Wind(speed: 5.2, deg: 180, gust: nil), visibility: 10000, pop: 0.0, sys: ForecastSys(pod: "d"), dtTxt: ""), timezoneOffset: -28800),
-            HourlyForecast(from: ForecastItem(dt: Int(Date().timeIntervalSince1970 + 3600 * 3), main: ForecastMain(temp: 295.15, feelsLike: 293.15, tempMin: 288.15, tempMax: 298.15, pressure: 1013, humidity: 60, seaLevel: nil, grndLevel: nil), weather: [Weather(id: 801, main: "Clouds", description: "few clouds", icon: "02d")], clouds: Clouds(all: 20), wind: Wind(speed: 4.8, deg: 175, gust: nil), visibility: 10000, pop: 0.0, sys: ForecastSys(pod: "d"), dtTxt: ""), timezoneOffset: -28800)
+            HourlyForecast(time: Date(), temperature: 20, icon: "sun.max.fill", description: "Clear", timezoneOffset: -28800),
+            HourlyForecast(time: Date().addingTimeInterval(3600 * 3), temperature: 22, icon: "cloud.sun.fill", description: "Partly Cloudy", timezoneOffset: -28800)
         ], isCelsius: true)
-        
+
         DailyForecastView(forecasts: [
-            DailyForecast(from: [ForecastItem(dt: Int(Date().timeIntervalSince1970), main: ForecastMain(temp: 293.15, feelsLike: 291.15, tempMin: 288.15, tempMax: 298.15, pressure: 1013, humidity: 65, seaLevel: nil, grndLevel: nil), weather: [Weather(id: 800, main: "Clear", description: "clear sky", icon: "01d")], clouds: Clouds(all: 0), wind: Wind(speed: 5.2, deg: 180, gust: nil), visibility: 10000, pop: 0.0, sys: ForecastSys(pod: "d"), dtTxt: "")], timezoneOffset: -28800),
-            DailyForecast(from: [ForecastItem(dt: Int(Date().timeIntervalSince1970 + 3600 * 24), main: ForecastMain(temp: 295.15, feelsLike: 293.15, tempMin: 289.15, tempMax: 299.15, pressure: 1013, humidity: 60, seaLevel: nil, grndLevel: nil), weather: [Weather(id: 801, main: "Clouds", description: "few clouds", icon: "02d")], clouds: Clouds(all: 20), wind: Wind(speed: 4.8, deg: 175, gust: nil), visibility: 10000, pop: 0.0, sys: ForecastSys(pod: "d"), dtTxt: "")], timezoneOffset: -28800)
+            DailyForecast(date: Date(), dayName: "Today", icon: "sun.max.fill", lowTemp: 15, highTemp: 25, description: "Clear"),
+            DailyForecast(date: Date().addingTimeInterval(86400), dayName: "Mon", icon: "cloud.sun.fill", lowTemp: 16, highTemp: 26, description: "Partly Cloudy")
         ], isCelsius: true)
     }
     .padding()
