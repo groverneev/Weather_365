@@ -198,14 +198,20 @@ class WeatherService: ObservableObject {
                     print("❌ [DEBUG] WeatherKit error: \(error.localizedDescription)")
                     print("❌ [DEBUG] Error details: \(error)")
 
-                    // Provide user-friendly error messages
-                    if let weatherError = error as? WeatherKit.WeatherError {
+                    let nsError = error as NSError
+                    print("❌ [DEBUG] Error domain: \(nsError.domain)")
+                    print("❌ [DEBUG] Error code: \(nsError.code)")
+
+                    // Check for specific error types
+                    if nsError.domain == "WeatherDaemon.WDSJWTAuthenticatorServiceListener.Errors" {
+                        self.errorMessage = "WeatherKit not authorized. Please ensure WeatherKit is enabled in Apple Developer Portal for this app."
+                    } else if let weatherError = error as? WeatherKit.WeatherError {
                         switch weatherError {
                         default:
                             self.errorMessage = "Unable to fetch weather data. Please try again."
                         }
                     } else {
-                        self.errorMessage = "Weather service temporarily unavailable"
+                        self.errorMessage = "Weather service error: \(nsError.localizedDescription)"
                     }
 
                     self.isLoading = false
