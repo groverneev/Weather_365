@@ -59,7 +59,12 @@ class WeatherService: ObservableObject {
                 print("🌐 [DEBUG] Network reachable: \(self?.isNetworkReachable ?? false)")
             }
         }
-        networkMonitor.start(queue: DispatchQueue.global())
+        let queue = DispatchQueue.global()
+        networkMonitor.start(queue: queue)
+
+        // Get initial network status synchronously to avoid race condition
+        isNetworkReachable = networkMonitor.currentPath.status == .satisfied
+        print("🌐 [DEBUG] Initial network status: \(networkMonitor.currentPath.status)")
     }
 
     // MARK: - Fetch Weather by City Name
@@ -122,6 +127,14 @@ class WeatherService: ObservableObject {
     func fetchWeatherByCoordinates(lat: Double, lon: Double) {
         isLoading = true
         errorMessage = nil
+
+        // Check network connectivity first
+        guard isNetworkReachable else {
+            print("❌ [DEBUG] Network is not reachable!")
+            errorMessage = "No internet connection available"
+            isLoading = false
+            return
+        }
 
         logger.info("📍 Fetching weather for coordinates: lat=\(lat), lon=\(lon)")
 
